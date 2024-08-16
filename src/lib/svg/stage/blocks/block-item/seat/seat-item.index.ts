@@ -1,8 +1,7 @@
 /*
- * $project.fileName
+ * seat-item.index.ts
  * https://github.com/alisaitteke/seatmap-canvas Copyright 2018 Ali Sait TEKE
  */
-
 
 import SvgBase from "@svg/svg.base";
 import {dom} from "@decorator/dom";
@@ -13,7 +12,6 @@ import {CoordinateModel} from "@model/coordinate.model";
 import {SeatItemTitle} from "./seat-item.title";
 import {SeatAction} from "@enum/global";
 import {SeatItemCheck} from "./seat-item.check";
-
 
 @dom({
     tag: "g",
@@ -32,6 +30,17 @@ export class SeatItem extends SvgBase {
         this.coordinates = new CoordinateModel(item);
         this.attr("transform", "translate(" + this.coordinates.toArray() + ")");
         this.item.svg = this;
+
+        // Add click event listener to dispatch SEAT.CLICK event
+        this.node.on('click', (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+
+            if (this.isSalable()) {
+                this.global.eventManager.dispatch('SEAT.CLICK', this);
+            }
+        });
+
         return this;
     }
 
@@ -51,6 +60,8 @@ export class SeatItem extends SvgBase {
     }
 
     public select(color: string | null = null): this {
+        if (!this.isSalable()) return this; // Prevent selection if not salable
+
         this.item.selected = true;
         this.node.classed("selected", true);
         this.circle.node.attr("fill", this.global.config.style.seat.selected);
@@ -75,7 +86,9 @@ export class SeatItem extends SvgBase {
     }
 
     public hover() {
-        this.setColor(this.global.config.style.seat.hover);
+        if (this.isSalable()) {
+            this.setColor(this.global.config.style.seat.hover);
+        }
     }
 
     public blur() {
@@ -83,31 +96,34 @@ export class SeatItem extends SvgBase {
     }
 
     public getColor(action: SeatAction| null = null): string {
+        if (this.item.salable === false) {
+            return this.global.config.style.seat.not_salable;
+        }
+
+        if (this.isSoftUnsaleable()) {
+            return this.global.config.style.seat.soft_unsalable;
+        }
 
         if (this.isSalable()) {
-
             if (action == SeatAction.FOCUS) {
                 if (this.isSelected()) {
                     return this.global.config.style.seat.focus_out;
                 } else {
                     return this.global.config.style.seat.focus;
                 }
-
             } else if (action == SeatAction.HOVER) {
                 if (this.isSelected()) {
                     return this.global.config.style.seat.selected;
                 } else {
                     return this.global.config.style.seat.hover;
                 }
-            }
-            else if (action == SeatAction.LEAVE) {
+            } else if (action == SeatAction.LEAVE) {
                 if (this.isSelected()) {
                     return this.global.config.style.seat.selected;
                 } else {
                     return this.global.config.style.seat.color;
                 }
-            }
-            else if (action == SeatAction.SELECT) {
+            } else if (action == SeatAction.SELECT) {
                 if (this.isSelected()) {
                     return this.global.config.style.seat.selected;
                 } else {
@@ -120,38 +136,37 @@ export class SeatItem extends SvgBase {
                     return this.global.config.style.seat.color;
                 }
             }
-
         } else {
             return this.global.config.style.seat.not_salable;
         }
-
     }
 
     update(): this {
         this.circle = new SeatItemCircle(this);
         this.addChild(this.circle);
 
-
         this.check = new SeatItemCheck(this).addTo(this);
-
-        // this.title = new SeatItemTitle(this);
-        // this.addChild(this.title);
-
 
         this.updateChilds();
 
-        //this.title.node.text(this.item.title);
+        if (this.isSoftUnsaleable()) {
+            this.node.style("opacity", 0.5); // Set opacity to 50% if soft unsalable
+        }
 
         return this;
     }
 
-    afterGenerate(){
+    afterGenerate() {
         this.setColor(this.getColor());
-        if(this.item.selected){
-            this.check.show()
-        }else{
-            this.check.hide()
+        if (this.item.selected){
+            this.check.show();
+        } else {
+            this.check.hide();
         }
+    }
 
+    // Method to check if the seat is soft unsalable
+    public isSoftUnsaleable(): boolean {
+        return this.global.config.style.seat.softUnsaleable === true && this.item.salable === false;
     }
 }
